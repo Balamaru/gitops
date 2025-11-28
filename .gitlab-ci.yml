@@ -1,0 +1,59 @@
+image: docker:latest
+
+services:
+  - name: docker:dind
+    alias: thedockerhost
+
+stages:
+  - build
+  - deploy
+
+variables:
+  TAG: $CI_COMMIT_SHA
+
+build_node:
+  stage: build
+  tags:
+    - runnernya
+  only:
+    - main
+  before_script:
+    - sudo apt-get update -y
+    - sudo apt-get install -y openssh-client sshpass
+  script:
+    - docker logout
+    - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    - docker build --progress "auto" -t $IMAGE_NODE:$TAG -f ./gitlab/services/nodejs-app/Dockerfile ./gitlab/services/nodejs-app && docker push $IMAGE_NODE:$TAG
+    - docker logout
+
+build_go:
+  stage: build
+  tags:
+    - runnernya
+  only:
+    - main
+  before_script:
+    - sudo apt-get update -y
+    - sudo apt-get install -y openssh-client sshpass
+  script:
+    - docker logout
+    - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    - docker build --progress "auto" -t $IMAGE_GO:$TAG -f ./gitlab/services/go-app/Dockerfile ./gitlab/services/go-app && docker push $IMAGE_GO:$TAG
+    - docker logout
+
+deploy:
+  stage: deploy
+  tags:
+    - runnernya
+  only:
+    - main
+  before_script:
+    - sudo apt-get update -y
+    - sudo apt-get install -y openssh-client sshpass
+    - echo "$ID_RSA" > id_rsa
+    - chmod 600 id_rsa
+  script:
+    - sed -i "s/{{TAG}}/$TAG/g" ./gitlab/manifest/go-deploy.yaml
+    - sed -i "s/{{TAG}}/$TAG/g" ./gitlab/manifest/node-deploy.yaml
+    - scp -i id_rsa -o StrictHostKeyChecking=no ./gitlab/manifest/*.yaml $SSH_USER@$SSH_HOST:/tmp/
+    - ssh -i id_rsa -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST "kubectl apply -f /tmp/node-deploy.yaml && kubectl apply -f /tmp/go-deploy.yaml && sudo rm /tmp/go-deploy.yaml /tmp/node-deploy.yaml"

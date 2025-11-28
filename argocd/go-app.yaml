@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: go-app
+  template:
+    metadata:
+      labels:
+        app: go-app
+    spec:
+      containers:
+      - name: go-app
+        image: docker.io/balamaru/go-app:{{TAG}}
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-app
+spec:
+  type: ClusterIP
+  selector:
+    app: go-app
+  ports:
+    - port: 80
+      targetPort: 8080
+
+---
+# (Optional) ingress
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: go-app
+# spec:
+#   tls:
+#   - hosts:
+#       - go-app.url.my
+#     secretName: mysecret
+#   rules:
+#   - host: go-app.url.my
+#     http:
+#       paths:
+#       - path: /
+#         pathType: Prefix
+#         backend:
+#           service:
+#             name: go-app
+#             port:
+#               number: 80

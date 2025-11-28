@@ -1,0 +1,61 @@
+image: docker:latest
+
+# services:
+#   - name: docker:dind
+#     alias: thedockerhost
+
+stages:
+  - build
+  - update-manifest
+
+variables:
+  TAG: $CI_COMMIT_SHA
+
+build_node:
+  stage: build
+  tags:
+    - runnernya
+  only:
+    - main
+  before_script:
+    - sudo apt-get update -y
+    - sudo apt-get install -y openssh-client sshpass
+  script:
+    - docker logout
+    - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    - docker build --progress "auto" -t $IMAGE_NODE:$TAG -f ./services/nodejs-app/Dockerfile ./services/nodejs-app && docker push $IMAGE_NODE:$TAG
+    - docker logout
+
+build_go:
+  stage: build
+  tags:
+    - runnernya
+  only:
+    - main
+  before_script:
+    - sudo apt-get update -y
+    - sudo apt-get install -y openssh-client sshpass
+  script:
+    - docker logout
+    - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    - docker build --progress "auto" -t $IMAGE_GO:$TAG -f ./services/go-app/Dockerfile ./services/go-app && docker push $IMAGE_GO:$TAG
+    - docker logout
+
+update_manifests:
+  stage: update_manifests
+  tags:
+    - runnernya
+  only:
+    - main
+  before_script:
+    - git config --global user.email "ci@gitlab.com"
+    - git config --global user.name "GitLab CI"
+  script:
+    - sed -i "s|image: .*/go-app:.*|image: ${IMAGE_GO}:${TAG}|g" gitops/argocd/go-app.yaml
+    - sed -i "s|image: .*/nodejs-app:.*|image: ${IMAGE_NODE}:${TAG}|g" gitops/argocd/node-app.yaml
+    - git add gitops/argocd/
+    - git commit -m "Update images to $CI_COMMIT_SHA [skip ci]" || echo "No changes to commit"
+    - git push origin HEAD:main || (sleep 5 && git push origin HEAD:main)
+  needs:
+    - build_go
+    - build_node

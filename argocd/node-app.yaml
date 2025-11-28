@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nodejs-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nodejs-app
+  template:
+    metadata:
+      labels:
+        app: nodejs-app
+    spec:
+      containers:
+      - name: nodejs-app
+        image: docker.io/balamaru/nodejs-app:{{TAG}}
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nodejs-app
+spec:
+  type: ClusterIP
+  selector:
+    app: nodejs-app
+  ports:
+    - port: 80
+      targetPort: 3000
+
+---
+# (Optional) ingress
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: go-app
+# spec:
+#   tls:
+#   - hosts:
+#       - nodejs-app.url.my
+#     secretName: mysecret
+#   rules:
+#   - host: nodejs-app.url.my
+#     http:
+#       paths:
+#       - path: /
+#         pathType: Prefix
+#         backend:
+#           service:
+#             name: nodejs-app
+#             port:
+#               number: 80
